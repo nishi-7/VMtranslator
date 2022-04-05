@@ -2,7 +2,6 @@ package vm
 
 import java.nio.file.{Paths, Files}
 import java.io.File
-import VMcommand._
 
 
 object VMtranlator {
@@ -10,32 +9,19 @@ object VMtranlator {
     val (files, name) = getFilesAndBasename(path)
     val output = new File(name+".asm")
     val cw = new CodeWrite(output)
-    cw.writeInit()
     for (f <- files) {
       val file = f.toString
-      val ext = file.substring(file.lastIndexOf("."))
-      if (ext == ".vm") {
-        val parser = new Parser(f);
+      if (file.endsWith(".vm")) {
+        val lexer = new Lexer(f)
+        val parser = new Parser(lexer);
         var fname = file.substring(0,file.lastIndexOf("."))
         if (fname.lastIndexOf("/") != -1) {
           fname = fname.substring(fname.lastIndexOf("/")+1)
         }
         cw.setFileName(fname)
         while (parser.hasMoreCommands()) {
-          parser.advance()
           val cmd = parser.command()
-          cmd match {
-            case Arith(op)     => cw.writeArithmetic(op)
-            case Push(seg,idx) => cw.writePush(seg,idx)
-            case Pop(seg,idx)  => cw.writePop(seg,idx)
-            case Label(s)      => cw.writeLabel(s)
-            case Goto(s)       => cw.writeGoto(s)
-            case If(s)         => cw.writeIf(s)
-            case Func(s,n)     => cw.writeFunction(s,n)
-            case Return        => cw.writeReturn()
-            case Call(s,n)     => cw.writeCall(s,n)
-            case _             =>
-          }
+          cw.writeCmd(cmd)
         }
       }
     }
@@ -45,7 +31,7 @@ object VMtranlator {
   def getFilesAndBasename(path: String): (List[File], String) = {
     val p = Paths.get(path)
     if (Files.notExists(p)) {
-      println("no exist file or directory")
+      Console.err.println(s"[Error] can't find ${path}")
       (List[File](), "")
     } else {
       val f = new File(path)
@@ -74,7 +60,7 @@ object VMtranlator {
     if (args.length>0) {
       VMtranlator.translate(args(0))
     } else {
-      println("no args")
+      Console.err.println("[Error] no args")
     }
   }
 }

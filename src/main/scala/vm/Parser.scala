@@ -1,82 +1,82 @@
 package vm
 
-import java.io.File
-import scala.io.Source
-import MyException._
-import Op._
-import Segment._
-import VMcommand._
+import MyError._
 
-class Parser(val path: File) {
-  val s = Source.fromFile(path)("UTF-8")
-  var cmd: Option[VMcommand] = None
-  var lines = List[String]()
-  var cmds = Iterator[String]()
-  try {
-    for (line <- s.getLines) {
-      var l = line
-      if (l.indexOf("/") != -1) {
-        l = l.substring(0,l.indexOf("/"))
-      }
-      l = l.trim
-      if (l.length != 0) {
-        lines :+= l
-      }
-    }
-  } finally {
-    s.close
+
+class Parser(lex: Lexer) {
+  private var curToken = lex.nextToken()
+  while (curToken.ty == NewLine) {
+    curToken = lex.nextToken()
   }
-  cmds = lines.iterator
 
-  def hasMoreCommands() = { cmds.hasNext }
+  def hasMoreCommands() = { curToken.ty != Eof }
 
   def advance() = {
-    if (hasMoreCommands()) {
-      val line = cmds.next.split(" +")
-      cmd = line(0) match {
-        case "push"     => Some(Push(str2seg(line(1)), line(2).toInt))
-        case "pop"      => Some(Pop(str2seg(line(1)), line(2).toInt))
-        case "label"    => Some(Label(line(1)))
-        case "goto"     => Some(Goto(line(1)))
-        case "if-goto"  => Some(If(line(1)))
-        case "function" => Some(Func(line(1), line(2).toInt))
-        case "call"     => Some(Call(line(1), line(2).toInt))
-        case "return"   => Some(Return)
-        case _          => Some(str2arith(line(0)))
+    val tok = curToken
+    curToken = lex.nextToken()
+    tok
+  }
+
+  def command(): VMCmd = {
+    val tok = this.advance()
+    tok.ty match {
+      case Push | Pop => parsePushPop(tok)
+      case Label | Goto | If => parseLabel(tok)
+      case Func | Call => parseFuncCall(tok)
+      case Return | Add | Sub | Neg | Eq | Gt | Lt | And | Or | Not => {
+        expectedNewLine()
+        VMCmd(Cmd0(tok.ty), tok.loc)
       }
-    } else {
-      throw(new MyException("No more commands."))
+      case tt => throwError("VM command", tok)
     }
   }
 
-  def command() = { cmd.get }
+  def parsePushPop(cmd: Token) = {
+    val seg = parseSegment()
+    val num = expected(Number(0))
+    expectedNewLine()
+    VMCmd(Cmd2(cmd.ty, seg.ty, num.ty), seg.loc)
+  }
 
-  def str2seg(s: String): Segment = {
-    s match {
-      case "argument" => Arg
-      case "local"    => Local
-      case "static"   => Static
-      case "constant" => Const
-      case "this"     => This
-      case "that"     => That
-      case "pointer"  => Pointer
-      case "temp"     => Temp
-      case _          => throw(new MyException("SyntaxError"))
+  def parseLabel(cmd: Token) = {
+    val sym = expected(Symbol("_"))
+    expectedNewLine()
+    VMCmd(Cmd1(cmd.ty, sym.ty), cmd.loc)
+  }
+
+  def parseFuncCall(cmd: Token) = {
+    val sym = expected(Symbol("_"))
+    val num = expected(Number(0))
+    expectedNewLine()
+    VMCmd(Cmd2(cmd.ty, sym.ty, num.ty), cmd.loc)
+  }
+
+  def parseSegment() = {
+    val seg = this.advance()
+    seg.ty match {
+      case Arg | Local | Static | Const | This | That | Pointer | Temp => seg
+      case s => throwError("segment", seg)
     }
   }
 
-  def str2arith(s: String): VMcommand = {
-    Arith(s match {
-      case "add" => Add
-      case "sub" => Sub
-      case "neg" => Neg
-      case "eq"  => Eq
-      case "gt"  => Gt
-      case "lt"  => Lt
-      case "and" => And
-      case "or"  => Or
-      case "not" => Not
-      case _     => throw(new MyException("SyntaxError"))
-    })
+  def check(ty: TokenType) = {
+    (curToken.ty, ty) match {
+      case (Number(_), Number(_)) | (Symbol(_), Symbol(_)) => true
+      case _ => curToken.ty == ty
+    }
+  }
+
+  def expected(ty: TokenType) = {
+    if (!this.check(ty)) {
+      throwSyntaxError(ty, curToken)
+    }
+    this.advance()
+  }
+
+  def expectedNewLine() = {
+    this.expected(NewLine)
+    while (curToken.ty == NewLine) {
+      this.advance()
+    }
   }
 }

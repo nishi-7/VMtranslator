@@ -1,12 +1,9 @@
 package vm
 
 import java.io.{PrintWriter, File}
-import MyException._
-import Op._
-import Segment._
-import VMcommand._
 import java.io.OutputStreamWriter
 import java.io.FileOutputStream
+import MyError._
 
 
 class CodeWrite(val output: File) {
@@ -15,8 +12,24 @@ class CodeWrite(val output: File) {
   var funcname = ""
   var alabel = 0
   var rlabel = 0
+  this.writeInit()
 
   def setFileName(new_filename: String) = { filename = new_filename }
+
+  def writeCmd(cmd: VMCmd) = {
+    cmd.ty match {
+      case Cmd2(Push, seg, Number(idx)) => writePush(seg, idx, cmd.loc)
+      case Cmd2(Pop, seg, Number(idx)) => writePop(seg, idx, cmd.loc)
+      case Cmd1(Label, Symbol(label)) => writeLabel(label)
+      case Cmd1(Goto, Symbol(label)) => writeGoto(label)
+      case Cmd1(If, Symbol(label)) => writeIf(label)
+      case Cmd2(Func, Symbol(func), Number(nLocals)) => writeFunction(func, nLocals)
+      case Cmd2(Call, Symbol(func), Number(nArgs)) => writeCall(func, nArgs)
+      case Cmd0(Return) => writeReturn()
+      case Cmd0(op) => writeArithmetic(op, cmd.loc)
+      case c => throwCodeGenError("VM command", c.toString, cmd.loc)
+    }
+  }
 
   def writeInit() = {
     write("@256")
@@ -26,7 +39,7 @@ class CodeWrite(val output: File) {
     writeCall("Sys.init", 0)
   }
 
-  def writeArithmetic(op: Op) = {
+  def writeArithmetic(op: TokenType, loc: Loc) = {
     write("@SP")
     op match {
       case Neg => write("A=M-1"); write("M=-M")
@@ -49,7 +62,7 @@ class CodeWrite(val output: File) {
               case Eq => write("D;JEQ")
               case Gt => write("D;JGT")
               case Lt => write("D;JLT")
-              case _  =>
+              case tt  => throwCodeGenError("arith op", tt.toString, loc)
             }
             write("@SP")
             write("A=M-1")
@@ -68,7 +81,7 @@ class CodeWrite(val output: File) {
     }
   }
 
-  def writePush(seg: Segment, idx: Int) = {
+  def writePush(seg: TokenType, idx: Int, loc: Loc) = {
     val id = idx.toString
     seg match {
       case Const   => write("@"+id); write("D=A");
@@ -83,6 +96,7 @@ class CodeWrite(val output: File) {
           case Arg   => write("@ARG")
           case This  => write("@THIS")
           case That  => write("@THAT")
+          case s     => throwCodeGenError("segment", s.toString, loc)
         }
         write("A=D+M")
         write("D=M")
@@ -94,7 +108,7 @@ class CodeWrite(val output: File) {
     write("M=D")
   }
 
-  def writePop(seg: Segment, idx: Int) = {
+  def writePop(seg: TokenType, idx: Int, loc: Loc) = {
     val id = idx.toString
     seg match {
       case Local | Arg | This | That => {
@@ -128,7 +142,7 @@ class CodeWrite(val output: File) {
           case Pointer => write("@R"+(idx+3).toString)
           case Temp    => write("@R"+(idx+5).toString)
           case Static  => write("@"+filename+"."+id)
-          case _       => throw(new MyException(""))
+          case s       => throwCodeGenError("segment", s.toString, loc)
         }
         write("M=D")
       }
