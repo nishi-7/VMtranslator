@@ -7,4 +7,4 @@ package vm
 //    push hoge 0
 //         ^^^^
 //   error: expected segment, but got illegal token"""
-case class Loc(file: String, line: Int, left: Int, len: Int)
+case class Loc(line: Int, left: Int, len: Int)

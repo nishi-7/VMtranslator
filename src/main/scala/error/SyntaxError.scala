@@ -4,8 +4,8 @@ import vm.Loc
 
 
 class SyntaxError(msg: String, loc: Loc) extends RuntimeException {
-  def errorReport(code: String): String = {
-    val file = s"file: ${this.loc.file}"
+  def errorReport(code: String, fname: String): String = {
+    val file = s"file: ${fname}"
     val pos = s"line: ${this.loc.line}"
     var lpos = this.loc.left
     var rpos = this.loc.left
