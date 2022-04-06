@@ -1,10 +1,8 @@
 package vm
 
-import java.io.File
-import scala.io.Source
-import scala.util.{Try, Success, Failure}
 import MyError._
 import Lexer.keywords
+
 
 object Lexer {
   private val keywords = Map(
@@ -36,34 +34,20 @@ object Lexer {
   )
 }
 
-class Lexer(val path: File) {
-  var code = ""
-  private val file = path.toString
+class Lexer(val code: String) {
   private var ch: Option[Char] = None
   private var pos = 0
   private var nextPos = 0
   private var line = 0
   private var left = -1
-  Try(Source.fromFile(path)("UTF-8")) match {
-    case Success(reader) => {
-      val src = reader.getLines().foldLeft("")((acc, e) => acc + "\n" + e)
-      reader.close()
-      code = if (src.endsWith("\n")) { src } else { src + "\n" }
-      this.readChar()
-    }
-    case Failure(exception) => {
-      Console.err.println(
-        s"[Error] can not find ${exception.printStackTrace().toString()}"
-      )
-    }
-  }
+  this.readChar()
 
   def nextToken(): Token = {
     this.skipWithSpaces()
     ch match {
-      case None => Token(Eof, Loc(file, line, left, 0))
+      case None => Token(Eof, Loc(line, left, 0))
       case Some('\n') => {
-        val tok = Token(NewLine, Loc(file, line, left, 1))
+        val tok = Token(NewLine, Loc(line, left, 1))
         this.readChar()
         line += 1
         tok
@@ -73,13 +57,13 @@ class Lexer(val path: File) {
           val ident = this.readIdentifier()
           keywords.get(ident) match {
             case Some(ty) =>
-              Token(ty, Loc(file, line, left - ident.length, ident.length))
+              Token(ty, Loc(line, left - ident.length, ident.length))
             case None =>
-              Token(Symbol(ident), Loc(file, line, left - ident.length, ident.length))
+              Token(Symbol(ident), Loc(line, left - ident.length, ident.length))
           }
         } else if (this.isDigit()) {
           val num = this.readNumber()
-          Token(Number(num.toInt), Loc(file, line, left - num.length, num.length))
+          Token(Number(num.toInt), Loc(line, left - num.length, num.length))
         } else if (c == '/') {
           this.readChar()
           if (ch == Some('/')) {
@@ -88,10 +72,10 @@ class Lexer(val path: File) {
             }
             this.nextToken()
           } else {
-            throwTokenError(Token(Illegal(c), Loc(file, line, left-1, 1)))
+            throwTokenError(Token(Illegal(c), Loc(line, left-1, 1)))
           }
         } else {
-          throwTokenError(Token(Illegal(c), Loc(file, line, left, 1)))
+          throwTokenError(Token(Illegal(c), Loc(line, left, 1)))
         }
       }
     }
